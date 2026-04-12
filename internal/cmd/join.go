@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -10,7 +11,12 @@ import (
 )
 
 func newJoinCmd(configFile *string) *cobra.Command {
-	return &cobra.Command{
+	var (
+		dryRun  bool
+		timeout time.Duration
+	)
+
+	cmd := &cobra.Command{
 		Use:   "join",
 		Short: "Add new node(s) to an existing cluster",
 		Long: `Join adds nodes that are defined in the config but not yet part of the cluster.
@@ -20,7 +26,13 @@ It detects which nodes are missing and provisions only those.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return cluster.Join(cmd.Context(), cfg)
+			ctx := contextWithSignal(cmd.Context(), timeout)
+			return cluster.Join(ctx, cfg, dryRun)
 		},
 	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would happen without making changes")
+	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "maximum time for the entire operation")
+
+	return cmd
 }

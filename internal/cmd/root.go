@@ -4,11 +4,16 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/VitruvianSoftware/homelab/internal/logging"
 )
 
 // NewRootCmd creates the top-level CLI command.
 func NewRootCmd(version, commit, date string) *cobra.Command {
-	var configFile string
+	var (
+		configFile string
+		verbose    bool
+	)
 
 	root := &cobra.Command{
 		Use:   "homelab",
@@ -20,9 +25,13 @@ Define your cluster topology in a YAML config file, then use homelab to
 bootstrap, scale, diagnose, and tear down your cluster.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			logging.Setup(verbose)
+		},
 	}
 
 	root.PersistentFlags().StringVarP(&configFile, "config", "c", "homelab.yaml", "path to cluster config file")
+	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable debug logging")
 
 	root.AddCommand(
 		newInitCmd(&configFile),
