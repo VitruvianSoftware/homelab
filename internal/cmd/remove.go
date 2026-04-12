@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -10,7 +11,10 @@ import (
 )
 
 func newRemoveCmd(configFile *string) *cobra.Command {
-	var nodeName string
+	var (
+		dryRun  bool
+		timeout time.Duration
+	)
 
 	cmd := &cobra.Command{
 		Use:   "remove <node-host>",
@@ -19,14 +23,17 @@ func newRemoveCmd(configFile *string) *cobra.Command {
 destroys the Lima VM on the target host.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			nodeName = args[0]
 			cfg, err := config.Load(*configFile)
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return cluster.Remove(c.Context(), cfg, nodeName)
+			ctx := contextWithSignal(c.Context(), timeout)
+			return cluster.Remove(ctx, cfg, args[0], dryRun)
 		},
 	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print what would happen without making changes")
+	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "maximum time for the entire operation")
 
 	return cmd
 }

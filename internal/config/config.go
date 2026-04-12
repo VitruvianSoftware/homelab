@@ -24,10 +24,14 @@ type ClusterConfig struct {
 
 // NodeConfig describes a single node in the cluster.
 type NodeConfig struct {
-	Host string     `yaml:"host"`
-	Role string     `yaml:"role"` // "server" or "agent"
-	Pool string     `yaml:"pool"`
-	VM   VMConfig   `yaml:"vm"`
+	Host       string   `yaml:"host"`
+	Role       string   `yaml:"role"` // "server" or "agent"
+	Pool       string   `yaml:"pool"`
+	VM         VMConfig `yaml:"vm"`
+	VMName     string   `yaml:"vmName,omitempty"`     // Override default VM name (default: "k8s-node")
+	SSHUser    string   `yaml:"sshUser,omitempty"`    // SSH username (default: current user)
+	SSHPort    string   `yaml:"sshPort,omitempty"`    // SSH port (default: 22)
+	SSHKeyPath string   `yaml:"sshKeyPath,omitempty"` // Path to SSH private key (optional)
 }
 
 // VMConfig describes the resource allocation for a Lima VM.
@@ -37,8 +41,23 @@ type VMConfig struct {
 	Disk   string `yaml:"disk"`
 }
 
+// GetVMName returns the VM name for this node, defaulting to "k8s-node".
+func (n *NodeConfig) GetVMName() string {
+	if n.VMName != "" {
+		return n.VMName
+	}
+	return "k8s-node"
+}
+
 // Load reads and parses a config file from the given path.
 func Load(path string) (*Config, error) {
+	// Support HOMELAB_CONFIG env var as fallback.
+	if path == "homelab.yaml" {
+		if envPath := os.Getenv("HOMELAB_CONFIG"); envPath != "" {
+			path = envPath
+		}
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file %s: %w", path, err)

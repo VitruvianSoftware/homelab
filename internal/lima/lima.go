@@ -6,13 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/VitruvianSoftware/homelab/internal/config"
 	"github.com/VitruvianSoftware/homelab/internal/remote"
 )
-
-const vmName = "k8s-node"
 
 // VMStatus represents the state of a Lima VM.
 type VMStatus string
@@ -28,11 +27,16 @@ const (
 type Manager struct {
 	runner *remote.Runner
 	node   config.NodeConfig
+	vmName string
 }
 
 // NewManager creates a new Lima manager for the given host and node config.
 func NewManager(runner *remote.Runner, node config.NodeConfig) *Manager {
-	return &Manager{runner: runner, node: node}
+	return &Manager{
+		runner: runner,
+		node:   node,
+		vmName: node.GetVMName(),
+	}
 }
 
 // Status returns the current VM status on the remote host.
@@ -58,7 +62,7 @@ func (m *Manager) Status(ctx context.Context) (VMStatus, error) {
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			continue
 		}
-		if entry.Name == vmName {
+		if entry.Name == m.vmName {
 			return VMStatus(entry.Status), nil
 		}
 	}
@@ -99,24 +103,29 @@ func (m *Manager) Provision(ctx context.Context) error {
 
 	switch status {
 	case VMStatusRunning:
+		slog.Debug("VM already running, skipping provision", "host", m.runner.Host, "vm", m.vmName)
 		fmt.Printf("  [%s] VM already running, skipping provision\n", m.runner.Host)
 		return nil
 	case VMStatusStopped:
+		slog.Info("VM stopped, starting", "host", m.runner.Host, "vm", m.vmName)
 		fmt.Printf("  [%s] VM exists but stopped, starting...\n", m.runner.Host)
-		_, err := m.runner.Run(ctx, fmt.Sprintf("limactl start %s", vmName))
+		_, err := m.runner.Run(ctx, fmt.Sprintf("limactl start %s", m.vmName))
 		return err
 	case VMStatusNotCreated:
+		slog.Info("creating and starting VM", "host", m.runner.Host, "vm", m.vmName,
+			"cpus", m.node.VM.CPUs, "memory", m.node.VM.Memory, "disk", m.node.VM.Disk)
 		fmt.Printf("  [%s] Creating and starting VM...\n", m.runner.Host)
 
 		// Write the config file to the remote host.
 		limaConfig := m.GenerateConfig()
-		_, err := m.runner.RunShell(ctx, fmt.Sprintf("cat > ~/k8s-node.yaml << 'LIMAEOF'\n%s\nLIMAEOF", limaConfig))
+		configPath := fmt.Sprintf("~/%s.yaml", m.vmName)
+		_, err := m.runner.RunShell(ctx, fmt.Sprintf("cat > %s << 'LIMAEOF'\n%s\nLIMAEOF", configPath, limaConfig))
 		if err != nil {
 			return fmt.Errorf("writing lima config: %w", err)
 		}
 
 		// Start the VM.
-		_, err = m.runner.Run(ctx, fmt.Sprintf("limactl start --name=%s ~/k8s-node.yaml --tty=false", vmName))
+		_, err = m.runner.Run(ctx, fmt.Sprintf("limactl start --name=%s %s --tty=false", m.vmName, configPath))
 		if err != nil {
 			return fmt.Errorf("starting lima VM: %w", err)
 		}
@@ -130,13 +139,13 @@ func (m *Manager) Provision(ctx context.Context) error {
 // GetBridgedIP returns the bridged LAN IP address of the VM.
 func (m *Manager) GetBridgedIP(ctx context.Context) (string, error) {
 	// Try lima0 interface first (socket_vmnet typically creates this).
-	out, err := m.runner.LimaShell(ctx, vmName, "ip -4 addr show lima0 2>/dev/null | grep -oP 'inet \\K[0-9.]+'")
+	out, err := m.runner.LimaShell(ctx, m.vmName, "ip -4 addr show lima0 2>/dev/null | grep -oP 'inet \\K[0-9.]+'")
 	if err == nil && out != "" {
 		return strings.TrimSpace(out), nil
 	}
 
 	// Fallback: use ip route to find the source IP for external traffic.
-	out, err = m.runner.LimaShell(ctx, vmName, "ip -4 route get 1.1.1.1 | grep -oP 'src \\K[0-9.]+'")
+	out, err = m.runner.LimaShell(ctx, m.vmName, "ip -4 route get 1.1.1.1 | grep -oP 'src \\K[0-9.]+'")
 	if err != nil {
 		return "", fmt.Errorf("could not determine bridged IP: %w", err)
 	}
@@ -152,11 +161,13 @@ func (m *Manager) Destroy(ctx context.Context) error {
 	}
 
 	if status == VMStatusNotCreated {
+		slog.Debug("no VM found, skipping destroy", "host", m.runner.Host, "vm", m.vmName)
 		fmt.Printf("  [%s] No VM found, skipping\n", m.runner.Host)
 		return nil
 	}
 
+	slog.Info("destroying VM", "host", m.runner.Host, "vm", m.vmName)
 	fmt.Printf("  [%s] Destroying VM...\n", m.runner.Host)
-	_, err = m.runner.Run(ctx, fmt.Sprintf("limactl stop %s --force 2>/dev/null; limactl delete %s --force", vmName, vmName))
+	_, err = m.runner.Run(ctx, fmt.Sprintf("limactl stop %s --force 2>/dev/null; limactl delete %s --force", m.vmName, m.vmName))
 	return err
 }
