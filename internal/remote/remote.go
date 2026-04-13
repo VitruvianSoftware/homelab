@@ -110,7 +110,11 @@ func (r *Runner) runOnce(ctx context.Context, command string) (string, error) {
 	if r.User != "" {
 		host = r.User + "@" + r.Host
 	}
-	args = append(args, host, command)
+
+	// Prepend Homebrew paths for non-interactive SSH sessions where
+	// .zprofile/.zshrc are not loaded.
+	wrappedCmd := fmt.Sprintf("export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; %s", command)
+	args = append(args, host, wrappedCmd)
 
 	slog.Debug("executing SSH command",
 		"host", r.Host,
