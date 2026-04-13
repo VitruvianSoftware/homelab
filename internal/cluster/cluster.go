@@ -300,8 +300,7 @@ func Destroy(ctx context.Context, cfg *config.Config, force, dryRun bool) error 
 	if !force {
 		fmt.Printf("⚠️  This will destroy the entire cluster %q. Are you sure? [y/N] ", cfg.Cluster.Name)
 		var confirm string
-		fmt.Scanln(&confirm)
-		if strings.ToLower(confirm) != "y" {
+		if _, err := fmt.Scanln(&confirm); err != nil || strings.ToLower(confirm) != "y" {
 			fmt.Println("Aborted.")
 			return nil
 		}
