@@ -4,6 +4,7 @@ package lima
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -71,11 +72,8 @@ func (m *Manager) Status(ctx context.Context) (VMStatus, error) {
 }
 
 // GenerateConfig returns the Lima YAML config for this node.
-func (m *Manager) GenerateConfig() string {
+func (m *Manager) GenerateConfig(socketPath string) string {
 	return fmt.Sprintf(`vmType: "vz"
-rosetta:
-  enabled: true
-  binfmt: true
 images:
   - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
     arch: "aarch64"
@@ -85,13 +83,13 @@ cpus: %d
 memory: "%s"
 disk: "%s"
 networks:
-  - socket: "/var/run/socket_vmnet"
+  - socket: "%s"
 provision:
   - mode: system
     script: |
       #!/bin/bash
       apt-get update -qq && apt-get install -y -qq curl open-iscsi nfs-common
-`, m.node.VM.CPUs, m.node.VM.Memory, m.node.VM.Disk)
+`, m.node.VM.CPUs, m.node.VM.Memory, m.node.VM.Disk, socketPath)
 }
 
 // Provision creates and starts the Lima VM on the remote host.
@@ -116,10 +114,18 @@ func (m *Manager) Provision(ctx context.Context) error {
 			"cpus", m.node.VM.CPUs, "memory", m.node.VM.Memory, "disk", m.node.VM.Disk)
 		fmt.Printf("  [%s] Creating and starting VM...\n", m.runner.Host)
 
-		// Write the config file to the remote host.
-		limaConfig := m.GenerateConfig()
+		// Detect socket_vmnet socket path on the remote host.
+		socketPath, err := m.detectSocketPath(ctx)
+		if err != nil {
+			return fmt.Errorf("detecting socket_vmnet path: %w", err)
+		}
+
+		// Write the config file to the remote host via base64 to avoid
+		// shell quoting issues with multiline content.
+		limaConfig := m.GenerateConfig(socketPath)
 		configPath := fmt.Sprintf("~/%s.yaml", m.vmName)
-		_, err := m.runner.RunShell(ctx, fmt.Sprintf("cat > %s << 'LIMAEOF'\n%s\nLIMAEOF", configPath, limaConfig))
+		encoded := base64Encode(limaConfig)
+		_, err = m.runner.Run(ctx, fmt.Sprintf("echo %s | base64 -d > %s", encoded, configPath))
 		if err != nil {
 			return fmt.Errorf("writing lima config: %w", err)
 		}
@@ -170,4 +176,38 @@ func (m *Manager) Destroy(ctx context.Context) error {
 	fmt.Printf("  [%s] Destroying VM...\n", m.runner.Host)
 	_, err = m.runner.Run(ctx, fmt.Sprintf("limactl stop %s --force 2>/dev/null; limactl delete %s --force", m.vmName, m.vmName))
 	return err
+}
+// detectSocketPath finds the actual socket_vmnet socket on the remote host.
+// The path varies by Homebrew installation: /opt/homebrew/var/run/ on ARM64,
+// /usr/local/var/run/ on Intel.
+func (m *Manager) detectSocketPath(ctx context.Context) (string, error) {
+	candidates := []string{
+		"/opt/homebrew/var/run/socket_vmnet",
+		"/usr/local/var/run/socket_vmnet",
+		"/var/run/socket_vmnet",
+	}
+
+	for _, path := range candidates {
+		_, err := m.runner.RunShell(ctx, fmt.Sprintf("sudo test -S %s", path))
+		if err == nil {
+			slog.Debug("found socket_vmnet", "host", m.runner.Host, "path", path)
+			return path, nil
+		}
+	}
+
+	// Fallback: try to find it via brew --prefix.
+	out, err := m.runner.RunShell(ctx, "brew --prefix 2>/dev/null")
+	if err == nil {
+		prefix := strings.TrimSpace(out)
+		path := prefix + "/var/run/socket_vmnet"
+		slog.Debug("using brew prefix for socket_vmnet", "host", m.runner.Host, "path", path)
+		return path, nil
+	}
+
+	return "", fmt.Errorf("[%s] could not find socket_vmnet socket — ensure socket_vmnet is installed and running", m.runner.Host)
+}
+
+// base64Encode encodes a string to base64 for safe transfer over SSH.
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
