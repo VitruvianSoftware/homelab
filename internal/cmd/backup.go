@@ -59,7 +59,7 @@ snapshot file, and restarts K3s.`,
 	}
 
 	cmd.Flags().StringVarP(&snapshotPath, "snapshot", "s", "", "path to the snapshot file")
-	cmd.MarkFlagRequired("snapshot")
+	cobra.CheckErr(cmd.MarkFlagRequired("snapshot"))
 	cmd.Flags().DurationVar(&timeout, "timeout", 15*time.Minute, "maximum time for the operation")
 
 	return cmd

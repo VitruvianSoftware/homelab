@@ -1,5 +1,5 @@
 # Binaries
-homelab
+/homelab
 *.exe
 
 # Go
