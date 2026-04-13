@@ -35,6 +35,7 @@ bootstrap, scale, diagnose, and tear down your cluster.`,
 
 	root.AddCommand(
 		newInitCmd(&configFile),
+		newApplyCmd(&configFile),
 		newJoinCmd(&configFile),
 		newRemoveCmd(&configFile),
 		newDestroyCmd(&configFile),
