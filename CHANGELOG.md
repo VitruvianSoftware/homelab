@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/VitruvianSoftware/homelab/compare/v1.0.1...v1.0.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* inject release automation token into pipeline ([deee977](https://github.com/VitruvianSoftware/homelab/commit/deee9778395aa1dfb31b4682f7043664fdaeb916))
+
 ## [1.0.1](https://github.com/VitruvianSoftware/homelab/compare/v1.0.0...v1.0.1) (2026-04-13)
 
 
