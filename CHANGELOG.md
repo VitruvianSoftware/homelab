@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/VitruvianSoftware/homelab/compare/v1.0.0...v1.0.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* trigger release for homebrew configuration ([87d46fa](https://github.com/VitruvianSoftware/homelab/commit/87d46fa2443c0f41b9c580551f989b73a8abcedb))
+
 ## 1.0.0 (2026-04-13)
 
 
