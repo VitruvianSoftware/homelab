@@ -194,11 +194,11 @@ Each macOS host needs:
 ## Development
 
 ```bash
-make build    # Build binary
-make test     # Run tests with race detector
-make lint     # Run golangci-lint
-make fmt      # Format source files
-make clean    # Remove build artifacts
+mise run build    # Build binary
+mise run test     # Run tests with race detector
+mise run lint     # Run golangci-lint
+mise run fmt      # Format source files
+mise run clean    # Remove build artifacts
 ```
 
 ## License
