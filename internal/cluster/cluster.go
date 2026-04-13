@@ -10,48 +10,86 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/VitruvianSoftware/homelab/internal/config"
 	"github.com/VitruvianSoftware/homelab/internal/k3s"
 	"github.com/VitruvianSoftware/homelab/internal/lima"
+	"github.com/VitruvianSoftware/homelab/internal/prereqs"
 	"github.com/VitruvianSoftware/homelab/internal/remote"
 )
 
+// InitOptions configures the Init operation.
+type InitOptions struct {
+	DryRun      bool
+	AutoInstall bool
+}
+
 // Init bootstraps a new cluster from scratch. It is idempotent.
-func Init(ctx context.Context, cfg *config.Config, dryRun bool) error {
-	slog.Info("initializing homelab cluster", "name", cfg.Cluster.Name, "nodes", len(cfg.Nodes), "dry_run", dryRun)
+func Init(ctx context.Context, cfg *config.Config, opts InitOptions) error {
+	slog.Info("initializing homelab cluster", "name", cfg.Cluster.Name, "nodes", len(cfg.Nodes), "dry_run", opts.DryRun)
 
-	// Phase 1: Provision all Lima VMs.
-	fmt.Println("📦 Phase 1: Provisioning VMs...")
-	ipMap := make(map[string]string) // host -> bridged IP
-
-	for _, node := range cfg.Nodes {
-		runner := newRunner(node)
-		mgr := lima.NewManager(runner, node)
-
-		if dryRun {
-			fmt.Printf("  [%s] Would provision VM (cpus=%d, memory=%s, disk=%s)\n",
-				node.Host, node.VM.CPUs, node.VM.Memory, node.VM.Disk)
-			ipMap[node.Host] = "<pending>"
-			continue
-		}
-
-		if err := mgr.Provision(ctx); err != nil {
-			return fmt.Errorf("[%s] provisioning VM: %w", node.Host, err)
-		}
-
-		ip, err := mgr.GetBridgedIP(ctx)
-		if err != nil {
-			return fmt.Errorf("[%s] getting bridged IP: %w", node.Host, err)
-		}
-		ipMap[node.Host] = ip
-		slog.Info("VM provisioned", "host", node.Host, "ip", ip)
-	}
-
-	if dryRun {
+	if opts.DryRun {
 		printDryRunPlan(cfg)
 		return nil
+	}
+
+	// Phase 0: Ensure prerequisites on all hosts (parallel).
+	fmt.Println("🔍 Phase 0: Checking prerequisites...")
+	g, gctx := errgroup.WithContext(ctx)
+	for _, node := range cfg.Nodes {
+		node := node
+		g.Go(func() error {
+			return prereqs.EnsureAll(gctx, node, opts.AutoInstall)
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("prerequisite check failed: %w", err)
+	}
+
+	// Phase 1: Provision all Lima VMs (parallel).
+	fmt.Println("\n📦 Phase 1: Provisioning VMs (parallel)...")
+	var mu sync.Mutex
+	ipMap := make(map[string]string)
+
+	g, gctx = errgroup.WithContext(ctx)
+	for i, node := range cfg.Nodes {
+		node := node
+		idx := i + 1
+		total := len(cfg.Nodes)
+		g.Go(func() error {
+			runner := newRunner(node)
+			mgr := lima.NewManager(runner, node)
+
+			if err := mgr.Provision(gctx); err != nil {
+				return fmt.Errorf("[%s] provisioning VM: %w", node.Host, err)
+			}
+
+			ip, err := mgr.GetBridgedIP(gctx)
+			if err != nil {
+				return fmt.Errorf("[%s] getting bridged IP: %w", node.Host, err)
+			}
+
+			mu.Lock()
+			ipMap[node.Host] = ip
+			mu.Unlock()
+
+			fmt.Printf("  [%d/%d] %s: VM ready (IP: %s)\n", idx, total, node.Host, ip)
+			slog.Info("VM provisioned", "host", node.Host, "ip", ip)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("VM provisioning failed: %w\n\nRecovery: re-run 'homelab init' to retry", err)
+	}
+
+	// Phase 2: Validate cross-VM network connectivity.
+	fmt.Println("\n🌐 Phase 2: Validating network connectivity...")
+	if err := validateNetwork(ctx, cfg, ipMap); err != nil {
+		return err
 	}
 
 	// Collect all server IPs for TLS SANs.
@@ -60,14 +98,14 @@ func Init(ctx context.Context, cfg *config.Config, dryRun bool) error {
 		serverIPs = append(serverIPs, ipMap[node.Host])
 	}
 
-	// Phase 2: Initialize the first control plane node.
-	fmt.Println("\n🔧 Phase 2: Bootstrapping control plane (CP-1)...")
+	// Phase 3: Initialize the first control plane node.
+	fmt.Println("\n🔧 Phase 3: Bootstrapping control plane (CP-1)...")
 	initNode := cfg.InitNode()
 	initRunner := newRunner(initNode)
 	initK3s := k3s.NewManager(initRunner)
 
 	if err := initK3s.InitCluster(ctx, ipMap[initNode.Host], initNode.Pool, cfg.Cluster.K3sVersion, serverIPs); err != nil {
-		return fmt.Errorf("[%s] initializing K3s: %w\n\nRecovery: this command is idempotent, re-run 'homelab init' to retry", initNode.Host, err)
+		return fmt.Errorf("[%s] initializing K3s: %w\n\nRecovery: re-run 'homelab init' to retry", initNode.Host, err)
 	}
 
 	if err := initK3s.WaitForReady(ctx, 5*time.Minute); err != nil {
@@ -82,10 +120,10 @@ func Init(ctx context.Context, cfg *config.Config, dryRun bool) error {
 
 	serverURL := fmt.Sprintf("https://%s:6443", ipMap[initNode.Host])
 
-	// Phase 3: Join remaining server nodes.
+	// Phase 4: Join remaining server nodes.
 	servers := cfg.ServerNodes()
 	if len(servers) > 1 {
-		fmt.Println("\n🔗 Phase 3: Joining control plane nodes...")
+		fmt.Println("\n🔗 Phase 4: Joining control plane nodes...")
 		for _, node := range servers[1:] {
 			runner := newRunner(node)
 			k3sMgr := k3s.NewManager(runner)
@@ -101,10 +139,10 @@ func Init(ctx context.Context, cfg *config.Config, dryRun bool) error {
 		}
 	}
 
-	// Phase 4: Join agent nodes.
+	// Phase 5: Join agent nodes.
 	agents := cfg.AgentNodes()
 	if len(agents) > 0 {
-		fmt.Println("\n🔗 Phase 4: Joining worker nodes...")
+		fmt.Println("\n🔗 Phase 5: Joining worker nodes...")
 		for _, node := range agents {
 			runner := newRunner(node)
 			k3sMgr := k3s.NewManager(runner)
@@ -116,14 +154,14 @@ func Init(ctx context.Context, cfg *config.Config, dryRun bool) error {
 		}
 	}
 
-	// Phase 5: Export kubeconfig.
-	fmt.Println("\n📋 Phase 5: Exporting kubeconfig...")
+	// Phase 6: Export kubeconfig.
+	fmt.Println("\n📋 Phase 6: Exporting kubeconfig...")
 	if err := exportKubeconfig(ctx, initK3s, ipMap[initNode.Host], cfg.Cluster.Kubeconfig); err != nil {
 		return err
 	}
 
-	// Phase 6: Final validation.
-	fmt.Println("\n✅ Phase 6: Validating cluster...")
+	// Phase 7: Final validation.
+	fmt.Println("\n✅ Phase 7: Validating cluster...")
 	out, err := initK3s.GetNodeStatus(ctx)
 	if err != nil {
 		return fmt.Errorf("[%s] getting node status: %w", initNode.Host, err)
@@ -348,6 +386,35 @@ func newRunner(node config.NodeConfig) *remote.Runner {
 		return remote.NewRunnerWithOpts(node.Host, node.SSHUser, node.SSHPort, node.SSHKeyPath)
 	}
 	return remote.NewRunner(node.Host)
+}
+
+// validateNetwork performs a cross-VM ping matrix to ensure all nodes can communicate.
+func validateNetwork(ctx context.Context, cfg *config.Config, ipMap map[string]string) error {
+	var failures []string
+
+	for _, from := range cfg.Nodes {
+		runner := newRunner(from)
+		for _, to := range cfg.Nodes {
+			if from.Host == to.Host {
+				continue
+			}
+			toIP := ipMap[to.Host]
+			_, err := runner.LimaShell(ctx, from.GetVMName(), fmt.Sprintf("ping -c 1 -W 3 %s", toIP))
+			if err != nil {
+				failures = append(failures, fmt.Sprintf("  %s → %s (%s): FAILED", from.Host, to.Host, toIP))
+				slog.Warn("network check failed", "from", from.Host, "to", to.Host, "to_ip", toIP)
+			} else {
+				slog.Debug("network check passed", "from", from.Host, "to", to.Host, "to_ip", toIP)
+			}
+		}
+	}
+
+	if len(failures) > 0 {
+		return fmt.Errorf("network validation failed — the following paths are broken:\n%s\n\nEnsure all VMs are bridged to the same LAN via socket_vmnet", strings.Join(failures, "\n"))
+	}
+
+	fmt.Println("  ✅ All VMs can reach each other")
+	return nil
 }
 
 func exportKubeconfig(ctx context.Context, k3sMgr *k3s.Manager, serverIP, kubeconfigPath string) error {
