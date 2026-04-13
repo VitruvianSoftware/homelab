@@ -30,13 +30,7 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^ci:'
-      - '^chore:'
+  disable: true
 
 release:
   github:
@@ -44,6 +38,7 @@ release:
     name: homelab
   draft: false
   prerelease: auto
+  mode: append
   name_template: "v{{.Version}}"
 
 brews:
