@@ -3,6 +3,7 @@ package prereqs
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -66,6 +67,11 @@ func EnsureAll(ctx context.Context, node config.NodeConfig, autoInstall bool) er
 
 	// 7. Ensure socket_vmnet directory is readable by Lima.
 	_, _ = runner.RunShell(ctx, fmt.Sprintf("sudo chmod 755 $(%s --prefix)/var/run 2>/dev/null", brewPath))
+
+	// 8. Configure Lima bridged networking.
+	if err := ensureLimaBridgedNetwork(ctx, runner, host, binPrefix); err != nil {
+		return err
+	}
 
 	slog.Info("all prerequisites satisfied", "host", host)
 	fmt.Printf("  [%s] ✅ All prerequisites satisfied\n", host)
@@ -176,25 +182,97 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 	for _, p := range socketPaths {
 		_, err := runner.RunShell(ctx, fmt.Sprintf("sudo test -S %s", p))
 		if err == nil {
-			slog.Debug("socket_vmnet running", "host", host, "path", p)
-			return nil
+			// Check if already running in bridged mode.
+			_, err := runner.RunShell(ctx, "sudo launchctl list homebrew.mxcl.socket_vmnet 2>/dev/null | grep -q bridged")
+			if err == nil {
+				slog.Debug("socket_vmnet running in bridged mode", "host", host, "path", p)
+				return nil
+			}
+			// Running but in shared mode — need to reconfigure.
+			slog.Info("reconfiguring socket_vmnet for bridged mode", "host", host)
+			break
 		}
 	}
 
-	// Also check if the service is already loaded and running via launchctl.
-	_, err := runner.RunShell(ctx, "sudo launchctl list | grep -q socket_vmnet")
-	if err == nil {
-		slog.Debug("socket_vmnet service loaded (socket check may have failed due to permissions)", "host", host)
-		return nil
+	// Detect the socket_vmnet binary and brew prefix.
+	prefix, _ := runner.RunShell(ctx, fmt.Sprintf("%s --prefix", brewPath))
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		prefix = "/opt/homebrew"
 	}
 
-	slog.Info("starting socket_vmnet service", "host", host)
-	fmt.Printf("  [%s] Starting socket_vmnet service...\n", host)
-	_, err = runner.RunShell(ctx, fmt.Sprintf("sudo %s services start socket_vmnet", brewPath))
-	if err != nil {
-		return fmt.Errorf("[%s] failed to start socket_vmnet: %w", host, err)
+	// Find the socket_vmnet binary.
+	socketBin, err := runner.RunShell(ctx, fmt.Sprintf("ls %s/Cellar/socket_vmnet/*/bin/socket_vmnet 2>/dev/null | head -1", prefix))
+	if err != nil || strings.TrimSpace(socketBin) == "" {
+		socketBin = prefix + "/bin/socket_vmnet"
 	}
+	socketBin = strings.TrimSpace(socketBin)
+
+	socketPath := prefix + "/var/run/socket_vmnet"
+	logDir := prefix + "/var/log/socket_vmnet"
+
+	slog.Info("configuring socket_vmnet in bridged mode", "host", host, "interface", "en0")
+	fmt.Printf("  [%s] Configuring socket_vmnet bridged mode...\n", host)
+
+	// Stop existing service.
+	_, _ = runner.RunShell(ctx, "sudo launchctl bootout system/homebrew.mxcl.socket_vmnet 2>/dev/null")
+
+	// Create a custom plist for bridged mode.
+	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>homebrew.mxcl.socket_vmnet</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>%s</string>
+    <string>--vmnet-mode=bridged</string>
+    <string>--vmnet-interface=en0</string>
+    <string>%s</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>%s/stderr</string>
+  <key>StandardOutPath</key>
+  <string>%s/stdout</string>
+</dict>
+</plist>`, socketBin, socketPath, logDir, logDir)
+
+	encoded := base64Encode(plist)
+	_, err = runner.RunShell(ctx, fmt.Sprintf("sudo mkdir -p %s && echo %s | base64 -d | sudo tee /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist > /dev/null", logDir, encoded))
+	if err != nil {
+		return fmt.Errorf("[%s] failed to write socket_vmnet plist: %w", host, err)
+	}
+
+	// Make sure the socket directory is accessible.
+	_, _ = runner.RunShell(ctx, fmt.Sprintf("sudo mkdir -p $(dirname %s) && sudo chmod 755 $(dirname %s)", socketPath, socketPath))
+
+	// Start the service.
+	_, err = runner.RunShell(ctx, "sudo launchctl bootstrap system /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist")
+	if err != nil {
+		return fmt.Errorf("[%s] failed to start socket_vmnet bridged service: %w", host, err)
+	}
+
+	// Wait briefly for socket to appear.
+	_, _ = runner.RunShell(ctx, "sleep 2")
+	_, err = runner.RunShell(ctx, fmt.Sprintf("sudo test -S %s", socketPath))
+	if err != nil {
+		return fmt.Errorf("[%s] socket_vmnet started but socket not found at %s", host, socketPath)
+	}
+
+	slog.Info("socket_vmnet running in bridged mode", "host", host)
 	return nil
+}
+
+func ensureLimaBridgedNetwork(_ context.Context, _ *remote.Runner, _ string, _ string) error {
+	// No longer needed — bridged mode is configured at the socket_vmnet service level.
+	return nil
+}
+
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
 func newRunner(node config.NodeConfig) *remote.Runner {

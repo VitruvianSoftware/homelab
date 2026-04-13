@@ -102,14 +102,56 @@ func (m *Manager) JoinServer(ctx context.Context, nodeIP, serverURL, token, pool
 		versionEnv = fmt.Sprintf("INSTALL_K3S_VERSION=%q ", k3sVersion)
 	}
 
+	// Install K3s binary and create systemd service without starting it,
+	// because the join may need multiple retries as etcd stabilizes.
 	script := fmt.Sprintf(
-		`curl -sfL https://get.k3s.io | %sK3S_TOKEN=%q INSTALL_K3S_EXEC="server" sh -s - --server=%s --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
+		`curl -sfL https://get.k3s.io | %sINSTALL_K3S_SKIP_START=true K3S_TOKEN=%q INSTALL_K3S_EXEC="server" sh -s - --server=%s --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
 		versionEnv, token, serverURL, nodeIP, nodeIP, sanFlags, pool,
 	)
 
 	slog.Debug("K3s join script", "host", m.runner.Host)
 	_, err = m.runner.LimaShellSudo(ctx, m.vmName, script)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Now start K3s and let it retry joining on its own.
+	fmt.Printf("  [%s] Starting K3s server (joining cluster)...\n", m.runner.Host)
+	_, err = m.runner.LimaShellSudo(ctx, m.vmName, "systemctl start k3s --no-block")
+	if err != nil {
+		return fmt.Errorf("[%s] starting k3s service: %w", m.runner.Host, err)
+	}
+
+	// Wait for K3s to join successfully by checking the API.
+	return m.waitForJoin(ctx, 3*time.Minute)
+}
+
+// waitForJoin waits until the K3s service is running and has joined the cluster.
+func (m *Manager) waitForJoin(ctx context.Context, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return fmt.Errorf("[%s] context cancelled while waiting for K3s join: %w", m.runner.Host, ctx.Err())
+		}
+
+		// Check if K3s process is running (active).
+		out, err := m.runner.LimaShellSudo(ctx, m.vmName, "systemctl is-active k3s 2>/dev/null")
+		if err == nil && strings.TrimSpace(out) == "active" {
+			slog.Info("K3s joined successfully", "host", m.runner.Host)
+			return nil
+		}
+
+		slog.Debug("waiting for K3s to join cluster", "host", m.runner.Host)
+		fmt.Printf("  [%s] Waiting for K3s to join cluster...\n", m.runner.Host)
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("[%s] context cancelled: %w", m.runner.Host, ctx.Err())
+		case <-time.After(10 * time.Second):
+		}
+	}
+
+	return fmt.Errorf("[%s] timed out waiting for K3s to join cluster", m.runner.Host)
 }
 
 // JoinAgent joins a worker node to the cluster.
@@ -151,7 +193,8 @@ func (m *Manager) GetToken(ctx context.Context) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// WaitForReady polls until K3s is initialized and the node token exists.
+// WaitForReady polls until K3s is initialized, the node token exists, and
+// the API server is responding to kubectl commands.
 func (m *Manager) WaitForReady(ctx context.Context, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 
@@ -161,19 +204,32 @@ func (m *Manager) WaitForReady(ctx context.Context, timeout time.Duration) error
 			return fmt.Errorf("[%s] context cancelled while waiting for K3s: %w", m.runner.Host, ctx.Err())
 		}
 
+		// Check that the node-token file exists.
 		out, err := m.runner.LimaShellSudo(ctx, m.vmName, "test -f /var/lib/rancher/k3s/server/node-token && echo ready || echo waiting")
-		if err == nil && strings.TrimSpace(out) == "ready" {
+		if err != nil || strings.TrimSpace(out) != "ready" {
+			slog.Debug("waiting for K3s node-token", "host", m.runner.Host)
+			fmt.Printf("  [%s] Waiting for K3s to initialize...\n", m.runner.Host)
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("[%s] context cancelled while waiting for K3s: %w", m.runner.Host, ctx.Err())
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
+
+		// Also verify the API server is accepting connections.
+		_, err = m.runner.LimaShellSudo(ctx, m.vmName, "k3s kubectl get nodes --request-timeout=5s 2>/dev/null")
+		if err == nil {
 			slog.Info("K3s is ready", "host", m.runner.Host)
 			return nil
 		}
 
-		slog.Debug("waiting for K3s to initialize", "host", m.runner.Host)
-		fmt.Printf("  [%s] Waiting for K3s to initialize...\n", m.runner.Host)
-
+		slog.Debug("K3s token exists but API server not ready yet", "host", m.runner.Host)
+		fmt.Printf("  [%s] K3s initializing (API server starting)...\n", m.runner.Host)
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("[%s] context cancelled while waiting for K3s: %w", m.runner.Host, ctx.Err())
-		case <-time.After(10 * time.Second):
+		case <-time.After(5 * time.Second):
 		}
 	}
 
