@@ -125,11 +125,12 @@ func checkLima(ctx context.Context, runner *remote.Runner, host string) CheckRes
 }
 
 func checkSocketVmnet(ctx context.Context, runner *remote.Runner, host string) CheckResult {
-	_, err := runner.Run(ctx, "test -S /var/run/socket_vmnet && echo ok")
+	cmd := `if sudo test -S /opt/homebrew/var/run/socket_vmnet; then echo /opt/homebrew/var/run/socket_vmnet; elif sudo test -S /usr/local/var/run/socket_vmnet; then echo /usr/local/var/run/socket_vmnet; elif sudo test -S /var/run/socket_vmnet; then echo /var/run/socket_vmnet; else exit 1; fi`
+	out, err := runner.RunShell(ctx, cmd)
 	if err != nil {
-		return CheckResult{Name: "socket_vmnet", Host: host, Passed: false, Message: "socket not found at /var/run/socket_vmnet"}
+		return CheckResult{Name: "socket_vmnet", Host: host, Passed: false, Message: "socket not found"}
 	}
-	return CheckResult{Name: "socket_vmnet", Host: host, Passed: true, Message: "running"}
+	return CheckResult{Name: "socket_vmnet", Host: host, Passed: true, Message: fmt.Sprintf("running at %s", strings.TrimSpace(out))}
 }
 
 func checkVM(ctx context.Context, mgr *lima.Manager, host string) CheckResult {
