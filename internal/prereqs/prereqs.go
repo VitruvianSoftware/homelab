@@ -261,7 +261,7 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 	_, _ = runner.RunShell(ctx, fmt.Sprintf("sudo mkdir -p $(dirname %s) && sudo chmod 755 $(dirname %s)", socketPath, socketPath))
 
 	// Start the service using our custom plist exclusively.
-	_, err = runner.RunShell(ctx, "sudo launchctl enable system/homebrew.mxcl.socket_vmnet 2>/dev/null")
+	_, _ = runner.RunShell(ctx, "sudo launchctl enable system/homebrew.mxcl.socket_vmnet 2>/dev/null")
 	_, err = runner.RunShell(ctx, "sudo launchctl bootstrap system /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist")
 	if err != nil {
 		return fmt.Errorf("[%s] failed to start socket_vmnet bridged service: %w", host, err)
