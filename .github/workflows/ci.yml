@@ -15,21 +15,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Verify dependencies
-        run: go mod verify
-
-      - name: Vet
-        run: go vet ./...
-
+      - uses: jdx/mise-action@v2
+      - name: Verify & Vet
+        run: |
+          go mod verify
+          go vet ./...
       - name: Test
-        run: go test -race -cover -coverprofile=coverage.out ./...
-
+        run: mise run test
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
@@ -41,17 +33,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64.8
-          install-mode: goinstall
+      - uses: jdx/mise-action@v2
+      - name: Lint
+        run: mise run lint
 
   build:
     name: Build
@@ -63,21 +47,14 @@ jobs:
         goarch: [arm64, amd64]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
+      - uses: jdx/mise-action@v2
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags "-s -w -X main.version=ci -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            -o homelab-${{ matrix.goos }}-${{ matrix.goarch }} \
-            ./cmd/homelab
-
+          mise run build
+          mv homelab homelab-${{ matrix.goos }}-${{ matrix.goarch }}
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:

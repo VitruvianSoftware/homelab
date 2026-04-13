@@ -1,0 +1,51 @@
+[env]
+BINARY = "homelab"
+MODULE = "github.com/VitruvianSoftware/homelab"
+
+[tools]
+go = "1.26.2"
+golangci-lint = "latest"
+goreleaser = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+
+[tasks.build]
+description = "Build the binary for the current platform"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo none)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS="-s -w -X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$DATE"
+go build -ldflags "$LDFLAGS" -o $BINARY ./cmd/homelab
+"""
+
+[tasks.install]
+description = "Build and install to $GOPATH/bin"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo none)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS="-s -w -X main.version=$VERSION -X main.commit=$COMMIT -X main.date=$DATE"
+go install -ldflags "$LDFLAGS" ./cmd/homelab
+"""
+
+[tasks.test]
+description = "Run all tests"
+run = "go test -race -cover ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Format all Go source files"
+run = """
+gofmt -s -w .
+goimports -w .
+"""
+
+[tasks.clean]
+description = "Remove build artifacts"
+run = """
+rm -f $BINARY
+rm -rf dist/
+"""
