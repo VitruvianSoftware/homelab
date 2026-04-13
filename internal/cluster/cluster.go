@@ -330,8 +330,11 @@ func Destroy(ctx context.Context, cfg *config.Config, force, dryRun bool) error 
 	// Remove kubeconfig.
 	kubeconfigPath := expandPath(cfg.Cluster.Kubeconfig)
 	if kubeconfigPath != "" {
-		os.Remove(kubeconfigPath)
-		slog.Info("removed kubeconfig", "path", kubeconfigPath)
+		if err := os.Remove(kubeconfigPath); err != nil && !os.IsNotExist(err) {
+			slog.Warn("failed to remove kubeconfig", "path", kubeconfigPath, "error", err)
+		} else if err == nil {
+			slog.Info("removed kubeconfig", "path", kubeconfigPath)
+		}
 	}
 
 	fmt.Printf("\n🗑️  Cluster %q destroyed.\n", cfg.Cluster.Name)
