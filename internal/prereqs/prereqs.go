@@ -173,6 +173,14 @@ func ensureSudoers(ctx context.Context, runner *remote.Runner, host, limactlPath
 }
 
 func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, brewPath string) error {
+	// Auto-detect the active network interface for bridging.
+	activeIface, err := runner.RunShell(ctx, "route -n get default 2>/dev/null | grep 'interface:' | sed 's/.*interface: //'")
+	if err != nil || strings.TrimSpace(activeIface) == "" {
+		activeIface = "en0" // fallback
+	}
+	activeIface = strings.TrimSpace(activeIface)
+	slog.Debug("detected active network interface", "host", host, "interface", activeIface)
+
 	// Check common socket locations (use sudo since directories may have restricted perms).
 	socketPaths := []string{
 		"/opt/homebrew/var/run/socket_vmnet",
@@ -182,14 +190,14 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 	for _, p := range socketPaths {
 		_, err := runner.RunShell(ctx, fmt.Sprintf("sudo test -S %s", p))
 		if err == nil {
-			// Check if already running in bridged mode.
-			_, err := runner.RunShell(ctx, "sudo launchctl list homebrew.mxcl.socket_vmnet 2>/dev/null | grep -q bridged")
-			if err == nil {
-				slog.Debug("socket_vmnet running in bridged mode", "host", host, "path", p)
+			// Check if already running in bridged mode on the correct interface.
+			out, _ := runner.RunShell(ctx, "cat /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist 2>/dev/null")
+			if strings.Contains(out, "--vmnet-mode=bridged") && strings.Contains(out, fmt.Sprintf("--vmnet-interface=%s", activeIface)) {
+				slog.Debug("socket_vmnet running in bridged mode on correct interface", "host", host, "path", p, "interface", activeIface)
 				return nil
 			}
-			// Running but in shared mode — need to reconfigure.
-			slog.Info("reconfiguring socket_vmnet for bridged mode", "host", host)
+			// Running but wrong mode or wrong interface — need to reconfigure.
+			slog.Info("reconfiguring socket_vmnet for bridged mode", "host", host, "interface", activeIface)
 			break
 		}
 	}
@@ -211,11 +219,14 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 	socketPath := prefix + "/var/run/socket_vmnet"
 	logDir := prefix + "/var/log/socket_vmnet"
 
-	slog.Info("configuring socket_vmnet in bridged mode", "host", host, "interface", "en0")
-	fmt.Printf("  [%s] Configuring socket_vmnet bridged mode...\n", host)
+	slog.Info("configuring socket_vmnet in bridged mode", "host", host, "interface", activeIface)
+	fmt.Printf("  [%s] Configuring socket_vmnet bridged mode (interface=%s)...\n", host, activeIface)
 
-	// Stop existing service.
+	// Stop any running instance.
+	_, _ = runner.RunShell(ctx, fmt.Sprintf("sudo %s services stop socket_vmnet 2>/dev/null", brewPath))
+	_, _ = runner.RunShell(ctx, "sudo launchctl bootout system /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist 2>/dev/null")
 	_, _ = runner.RunShell(ctx, "sudo launchctl bootout system/homebrew.mxcl.socket_vmnet 2>/dev/null")
+	_, _ = runner.RunShell(ctx, "sleep 1")
 
 	// Create a custom plist for bridged mode.
 	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
@@ -228,7 +239,7 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
   <array>
     <string>%s</string>
     <string>--vmnet-mode=bridged</string>
-    <string>--vmnet-interface=en0</string>
+    <string>--vmnet-interface=%s</string>
     <string>%s</string>
   </array>
   <key>RunAtLoad</key>
@@ -238,7 +249,7 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
   <key>StandardOutPath</key>
   <string>%s/stdout</string>
 </dict>
-</plist>`, socketBin, socketPath, logDir, logDir)
+</plist>`, socketBin, activeIface, socketPath, logDir, logDir)
 
 	encoded := base64Encode(plist)
 	_, err = runner.RunShell(ctx, fmt.Sprintf("sudo mkdir -p %s && echo %s | base64 -d | sudo tee /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist > /dev/null", logDir, encoded))
@@ -249,7 +260,8 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 	// Make sure the socket directory is accessible.
 	_, _ = runner.RunShell(ctx, fmt.Sprintf("sudo mkdir -p $(dirname %s) && sudo chmod 755 $(dirname %s)", socketPath, socketPath))
 
-	// Start the service.
+	// Start the service using our custom plist exclusively.
+	_, err = runner.RunShell(ctx, "sudo launchctl enable system/homebrew.mxcl.socket_vmnet 2>/dev/null")
 	_, err = runner.RunShell(ctx, "sudo launchctl bootstrap system /Library/LaunchDaemons/homebrew.mxcl.socket_vmnet.plist")
 	if err != nil {
 		return fmt.Errorf("[%s] failed to start socket_vmnet bridged service: %w", host, err)
@@ -262,7 +274,7 @@ func ensureSocketVmnetRunning(ctx context.Context, runner *remote.Runner, host, 
 		return fmt.Errorf("[%s] socket_vmnet started but socket not found at %s", host, socketPath)
 	}
 
-	slog.Info("socket_vmnet running in bridged mode", "host", host)
+	slog.Info("socket_vmnet running in bridged mode", "host", host, "interface", activeIface)
 	return nil
 }
 

@@ -68,8 +68,8 @@ func (m *Manager) InitCluster(ctx context.Context, nodeIP, pool, k3sVersion stri
 	}
 
 	script := fmt.Sprintf(
-		`curl -sfL https://get.k3s.io | %sINSTALL_K3S_EXEC="server" sh -s - --cluster-init --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
-		versionEnv, nodeIP, nodeIP, sanFlags, pool,
+		`curl -sfL https://get.k3s.io | %sINSTALL_K3S_EXEC="server" sh -s - --cluster-init --node-name=%s --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
+		versionEnv, m.runner.Host, nodeIP, nodeIP, sanFlags, pool,
 	)
 
 	slog.Debug("K3s install script", "host", m.runner.Host, "script", script)
@@ -105,8 +105,8 @@ func (m *Manager) JoinServer(ctx context.Context, nodeIP, serverURL, token, pool
 	// Install K3s binary and create systemd service without starting it,
 	// because the join may need multiple retries as etcd stabilizes.
 	script := fmt.Sprintf(
-		`curl -sfL https://get.k3s.io | %sINSTALL_K3S_SKIP_START=true K3S_TOKEN=%q INSTALL_K3S_EXEC="server" sh -s - --server=%s --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
-		versionEnv, token, serverURL, nodeIP, nodeIP, sanFlags, pool,
+		`curl -sfL https://get.k3s.io | %sINSTALL_K3S_SKIP_START=true K3S_TOKEN=%q INSTALL_K3S_EXEC="server" sh -s - --server=%s --node-name=%s --node-ip=%s --advertise-address=%s%s --flannel-iface=lima0 --node-label=pool=%s`,
+		versionEnv, token, serverURL, m.runner.Host, nodeIP, nodeIP, sanFlags, pool,
 	)
 
 	slog.Debug("K3s join script", "host", m.runner.Host)
@@ -175,8 +175,8 @@ func (m *Manager) JoinAgent(ctx context.Context, nodeIP, serverURL, token, pool,
 	}
 
 	script := fmt.Sprintf(
-		`curl -sfL https://get.k3s.io | %sK3S_TOKEN=%q K3S_URL=%q sh -s - agent --node-ip=%s --flannel-iface=lima0 --node-label=pool=%s`,
-		versionEnv, token, serverURL, nodeIP, pool,
+		`curl -sfL https://get.k3s.io | %sK3S_TOKEN=%q K3S_URL=%q sh -s - agent --node-name=%s --node-ip=%s --flannel-iface=lima0 --node-label=pool=%s`,
+		versionEnv, token, serverURL, m.runner.Host, nodeIP, pool,
 	)
 
 	slog.Debug("K3s agent join script", "host", m.runner.Host)

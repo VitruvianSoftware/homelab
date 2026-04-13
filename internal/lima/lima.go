@@ -130,10 +130,17 @@ func (m *Manager) Provision(ctx context.Context) error {
 			return fmt.Errorf("writing lima config: %w", err)
 		}
 
-		// Start the VM.
-		_, err = m.runner.Run(ctx, fmt.Sprintf("limactl start --name=%s %s --tty=false", m.vmName, configPath))
+		// Start the VM with a generous timeout for boot scripts.
+		_, err = m.runner.Run(ctx, fmt.Sprintf("limactl start --name=%s %s --tty=false --timeout=15m0s", m.vmName, configPath))
 		if err != nil {
-			return fmt.Errorf("starting lima VM: %w", err)
+			// limactl may timeout even though the VM is running fine.
+			// Check if the VM actually started despite the error.
+			status, checkErr := m.Status(ctx)
+			if checkErr == nil && status == VMStatusRunning {
+				slog.Warn("limactl start returned error but VM is running", "host", m.runner.Host)
+			} else {
+				return fmt.Errorf("starting lima VM: %w", err)
+			}
 		}
 
 		return nil
