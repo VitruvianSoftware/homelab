@@ -129,30 +129,35 @@ homelab status
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   homelab CLI                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │  config   │  │ cluster  │  │  doctor  │         │
-│  │  (YAML)   │  │  (orch)  │  │ (diag.)  │         │
-│  └──────────┘  └──────────┘  └──────────┘         │
-│       │              │              │               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
-│  │  prereqs  │  │   lima   │  │   k3s    │         │
-│  │(auto-inst)│  │(VM mgmt) │  │(K3s mgmt)│         │
-│  └──────────┘  └──────────┘  └──────────┘         │
-│                      │                              │
-│               ┌──────────┐                          │
-│               │  remote   │                          │
-│               │  (SSH)    │                          │
-│               └──────────┘                          │
-└─────────────────────────────────────────────────────┘
-         │              │              │
-    ┌────┴────┐   ┌────┴────┐   ┌────┴────┐
-    │  mac-1  │   │  mac-2  │   │  mac-3  │
-    │Lima VM  │   │Lima VM  │   │Lima VM  │
-    │  K3s    │   │  K3s    │   │  K3s    │
-    └─────────┘   └─────────┘   └─────────┘
+```mermaid
+graph TD
+    subgraph CLI ["homelab CLI"]
+        config["config (YAML)"]
+        cluster["cluster (orch)"]
+        doctor["doctor (diag.)"]
+        
+        prereqs["prereqs (auto-inst)"]
+        lima["lima (VM mgmt)"]
+        k3s["k3s (K3s mgmt)"]
+        
+        remote["remote (SSH)"]
+        
+        config --> prereqs
+        cluster --> lima
+        doctor --> k3s
+        
+        prereqs --> remote
+        lima --> remote
+        k3s --> remote
+    end
+
+    mac1["mac-1<br/>Lima VM / K3s"]
+    mac2["mac-2<br/>Lima VM / K3s"]
+    mac3["mac-3<br/>Lima VM / K3s"]
+
+    remote --> mac1
+    remote --> mac2
+    remote --> mac3
 ```
 
 ## Config Reference
@@ -198,4 +203,4 @@ make clean    # Remove build artifacts
 
 ## License
 
-MIT
+Apache-2.0

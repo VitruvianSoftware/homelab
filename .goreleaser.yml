@@ -53,6 +53,6 @@ brews:
     directory: Formula
     homepage: "https://github.com/VitruvianSoftware/homelab"
     description: "Declaratively provision and manage multi-node K8s homelab clusters on macOS"
-    license: "MIT"
+    license: "Apache-2.0"
     test: |
       system "#{bin}/homelab", "version"
