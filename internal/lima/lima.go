@@ -139,13 +139,13 @@ func (m *Manager) Provision(ctx context.Context) error {
 // GetBridgedIP returns the bridged LAN IP address of the VM.
 func (m *Manager) GetBridgedIP(ctx context.Context) (string, error) {
 	// Try lima0 interface first (socket_vmnet typically creates this).
-	out, err := m.runner.LimaShell(ctx, m.vmName, "ip -4 addr show lima0 2>/dev/null | grep -oP 'inet \\K[0-9.]+'")
+	out, err := m.runner.LimaShell(ctx, m.vmName, "ip -4 addr show lima0 2>/dev/null | awk '/inet / {split($2,a,\"/\"); print a[1]}'")
 	if err == nil && out != "" {
 		return strings.TrimSpace(out), nil
 	}
 
 	// Fallback: use ip route to find the source IP for external traffic.
-	out, err = m.runner.LimaShell(ctx, m.vmName, "ip -4 route get 1.1.1.1 | grep -oP 'src \\K[0-9.]+'")
+	out, err = m.runner.LimaShell(ctx, m.vmName, "ip -4 route get 1.1.1.1 | awk '/src/ {for(i=1;i<=NF;i++) if($i==\"src\") print $(i+1)}'")
 	if err != nil {
 		return "", fmt.Errorf("could not determine bridged IP: %w", err)
 	}
