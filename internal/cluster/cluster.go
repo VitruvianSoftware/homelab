@@ -176,20 +176,43 @@ func Init(ctx context.Context, cfg *config.Config, opts InitOptions) error {
 func Join(ctx context.Context, cfg *config.Config, dryRun bool) error {
 	slog.Info("joining new nodes to cluster", "name", cfg.Cluster.Name, "dry_run", dryRun)
 
-	// Get the init node to query current cluster state and retrieve the token.
-	initNode := cfg.InitNode()
-	initRunner := newRunner(initNode)
-	initK3s := k3s.NewManager(initRunner)
-	initLima := lima.NewManager(initRunner, initNode)
+	var (
+		initIP string
+		token  string
+		found  bool
+	)
 
-	initIP, err := initLima.GetBridgedIP(ctx)
-	if err != nil {
-		return fmt.Errorf("[%s] getting init node IP: %w", initNode.Host, err)
+	// Find the first healthy server node to query current cluster state and retrieve the token.
+	for _, n := range cfg.ServerNodes() {
+		runner := newRunner(n)
+		k3sMgr := k3s.NewManager(runner)
+
+		installed, _ := k3sMgr.IsInstalled(ctx)
+		if !installed {
+			continue
+		}
+
+		limaMgr := lima.NewManager(runner, n)
+		ip, err := limaMgr.GetBridgedIP(ctx)
+		if err != nil {
+			slog.Debug("failed to get IP for healthy server", "host", n.Host, "error", err)
+			continue
+		}
+
+		t, err := k3sMgr.GetToken(ctx)
+		if err != nil {
+			slog.Debug("failed to get token from healthy server", "host", n.Host, "error", err)
+			continue
+		}
+
+		initIP = ip
+		token = t
+		found = true
+		break
 	}
 
-	token, err := initK3s.GetToken(ctx)
-	if err != nil {
-		return fmt.Errorf("[%s] getting cluster token: %w", initNode.Host, err)
+	if !found {
+		return fmt.Errorf("no existing healthy server node found to join against")
 	}
 
 	serverURL := fmt.Sprintf("https://%s:6443", initIP)
