@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/VitruvianSoftware/homelab/compare/v1.0.2...v1.0.3) (2026-04-27)
+
+
+### Bug Fixes
+
+* dynamically select healthy server node for cluster join ([61c9b4f](https://github.com/VitruvianSoftware/homelab/commit/61c9b4fc0b4841ab807aa5c80e2362a8189679db))
+
 ## [1.0.2](https://github.com/VitruvianSoftware/homelab/compare/v1.0.1...v1.0.2) (2026-04-13)
 
 
