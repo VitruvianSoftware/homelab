@@ -80,3 +80,13 @@ jobs:
         with:
           name: homelab-${{ matrix.goos }}-${{ matrix.goarch }}
           path: homelab-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: go install github.com/google/addlicense@v1.2.0
+      - name: Check license headers
+        # go install drops the binary in GOPATH/bin, which isn't on PATH on the runner.
+        run: '"$(go env GOPATH)/bin/addlicense" -check -c "VitruvianSoftware" -l mit .'
