@@ -37,10 +37,10 @@ concurrency:
 jobs:
   test:
     name: Test
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
       - name: Verify & Vet
         run: |
@@ -49,24 +49,24 @@ jobs:
       - name: Test
         run: mise run test
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage.out
 
   lint:
     name: Lint
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
       - name: Lint
         run: mise run lint
 
   build:
     name: Build
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [test, lint]
     strategy:
@@ -74,17 +74,20 @@ jobs:
         goos: [darwin]
         goarch: [arm64, amd64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          # Cross-compiling darwin from the Linux runner: disable cgo so the
+          # build needs no darwin C toolchain (homelab is pure Go).
+          CGO_ENABLED: "0"
         run: |
           mise run build
           mv homelab homelab-${{ matrix.goos }}-${{ matrix.goarch }}
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: homelab-${{ matrix.goos }}-${{ matrix.goarch }}
           path: homelab-${{ matrix.goos }}-${{ matrix.goarch }}
