@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/VitruvianSoftware/homelab/compare/v1.0.3...v1.1.0) (2026-06-26)
+
+
+### Features
+
+* **copybara:** App-authenticated PR-import for all mirrors ([#78](https://github.com/VitruvianSoftware/homelab/issues/78)/[#79](https://github.com/VitruvianSoftware/homelab/issues/79)/[#80](https://github.com/VitruvianSoftware/homelab/issues/80)) ([#121](https://github.com/VitruvianSoftware/homelab/issues/121)) ([982e5cd](https://github.com/VitruvianSoftware/homelab/commit/982e5cd15d384600def4af2af193a6a80f953222))
+
 ## [1.0.3](https://github.com/VitruvianSoftware/homelab/compare/v1.0.2...v1.0.3) (2026-04-27)
 
 
