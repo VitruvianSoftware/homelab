@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.1.0...homelab-v1.1.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **backstage:** make TechDocs work for every component ([#1700](https://github.com/VitruvianSoftware/vitruvian-core/issues/1700)) ([26c6aa7](https://github.com/VitruvianSoftware/vitruvian-core/commit/26c6aa7c2953877a116bd59413b0a1d07e5f9e51))
+
 ## [1.1.0](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.0.3...homelab-v1.1.0) (2026-07-10)
 
 
