@@ -30,6 +30,9 @@ metadata:
   annotations:
     github.com/project-slug: VitruvianSoftware/vitruvian-core
     backstage.io/techdocs-ref: dir:.
+    # Single word => matched as a Grafana TAG (case-sensitive).
+    # Currently resolves to: Node Power
+    grafana/dashboard-selector: homelab
     vitruvian.dev/release-workflow: apps-release.yml
     vitruvian.dev/release-model: goreleaser
     vitruvian.dev/mirror: VitruvianSoftware/homelab
