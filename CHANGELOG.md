@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.2.0...homelab-v1.3.0) (2026-08-18)
+
+
+### Features
+
+* **backstage:** surface Grafana dashboards on entity pages ([#1758](https://github.com/VitruvianSoftware/vitruvian-core/issues/1758)) ([e0d802d](https://github.com/VitruvianSoftware/vitruvian-core/commit/e0d802d1d20edc15ae8ade4520c057728d76776f))
+
 ## [1.2.0](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.1.1...homelab-v1.2.0) (2026-08-17)
 
 
