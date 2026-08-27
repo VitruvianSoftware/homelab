@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.3.0...homelab-v1.4.0) (2026-08-27)
+
+
+### Features
+
+* **catalog:** onboard missing infrastructure and enrich components with metadata links ([#1982](https://github.com/VitruvianSoftware/vitruvian-core/issues/1982)) ([bcf1c7b](https://github.com/VitruvianSoftware/vitruvian-core/commit/bcf1c7b4efb6c11d7ec3446d11044fc192aaad3d))
+
 ## [1.3.0](https://github.com/VitruvianSoftware/vitruvian-core/compare/homelab-v1.2.0...homelab-v1.3.0) (2026-08-18)
 
 
