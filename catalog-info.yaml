@@ -36,6 +36,16 @@ metadata:
     vitruvian.dev/release-workflow: apps-release.yml
     vitruvian.dev/release-model: goreleaser
     vitruvian.dev/mirror: VitruvianSoftware/homelab
+  links:
+    - url: https://github.com/VitruvianSoftware/homelab
+      title: GitHub Mirror
+      icon: github
+    - url: https://github.com/VitruvianSoftware/homelab/releases
+      title: Releases (GoReleaser)
+      icon: card_giftcard
+    - url: https://grafana.lab.ipv1337.dev/d/homelab
+      title: Grafana Node Power
+      icon: dashboard
 spec:
   type: tool
   lifecycle: production
