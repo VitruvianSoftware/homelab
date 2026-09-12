@@ -69,7 +69,7 @@ func Apply(ctx context.Context, cfg *config.Config, dryRun bool) error {
 		// Quick string matching since limactl list --json has deterministic keys:
 		// "cpus":8, "memory":8589934592 or "memory":"8GiB" depending on version.
 		expectedCPUs := fmt.Sprintf(`"cpus":%d`, node.VM.CPUs)
-		
+
 		// If CPU matches, we skip for now (we can do robust checking, but this is a simple heuristic).
 		if strings.Contains(out, expectedCPUs) {
 			slog.Debug("node resources match configuration", "host", node.Host)

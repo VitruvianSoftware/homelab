@@ -27,8 +27,8 @@ import (
 	"strings"
 
 	"github.com/VitruvianSoftware/homelab/internal/config"
-	"github.com/VitruvianSoftware/homelab/internal/lima"
 	"github.com/VitruvianSoftware/homelab/internal/k3s"
+	"github.com/VitruvianSoftware/homelab/internal/lima"
 	"github.com/VitruvianSoftware/homelab/internal/remote"
 )
 

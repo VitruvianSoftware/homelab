@@ -25,8 +25,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/VitruvianSoftware/homelab/internal/config"
 	"github.com/VitruvianSoftware/homelab/internal/cluster"
+	"github.com/VitruvianSoftware/homelab/internal/config"
 )
 
 func newStatusCmd(configFile *string) *cobra.Command {
