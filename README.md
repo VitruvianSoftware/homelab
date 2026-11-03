@@ -19,9 +19,14 @@ Declaratively provision and manage multi-node Kubernetes homelab clusters on mac
 ### Homebrew (recommended)
 
 ```bash
+# Trust our tap once: Homebrew 7 refuses to load anything from an
+# untrusted third-party tap (and brew upgrade silently skips it).
 brew tap vitruviansoftware/tap
+brew trust vitruviansoftware/tap
 brew install vitruviansoftware/tap/homelab
 ```
+
+> **Already installed but stuck on an old version?** Run `brew trust vitruviansoftware/tap && brew upgrade vitruviansoftware/tap/homelab`.
 
 ### From source
 
