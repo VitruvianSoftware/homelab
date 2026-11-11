@@ -209,3 +209,7 @@ mise run clean    # Remove build artifacts
 ## License
 
 Apache-2.0
+
+## Subdirectories & Boundaries
+- [rs](./rs/README.md): Subsystem blueprint grouping child modules under apps/cli/homelab/rs.
+
