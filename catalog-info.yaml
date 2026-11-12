@@ -25,7 +25,8 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: homelab
+  name: vitruvian-homelab
+  title: Vitruvian Homelab
   description: Homelab k3s/Lima provisioning CLI (superseded for live cluster ops by devx; still released)
   annotations:
     github.com/project-slug: VitruvianSoftware/vitruvian-core

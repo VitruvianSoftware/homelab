@@ -1,7 +1,7 @@
 # Src
 
 ## Overview
-Component package providing implementation for `apps/cli/homelab/rs/src`.
+Component package providing implementation for `apps/cli/vitruvian-homelab/rs/src`.
 
 ## Interface
 - `[cluster.rs:InitOptions]`
@@ -43,4 +43,4 @@ Component package providing implementation for `apps/cli/homelab/rs/src`.
 - [remote.rs:180]: `self.executor = Some(Arc::new(exec));`
 
 ## Verification
-- Run: `bazel test //apps/cli/homelab/rs/src/...`
+- Run: `bazel test //apps/cli/vitruvian-homelab/rs/src/...`

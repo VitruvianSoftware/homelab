@@ -1,4 +1,4 @@
-# homelab
+# Vitruvian Homelab
 
 Declaratively provision and manage multi-node Kubernetes homelab clusters on macOS using [Lima VZ](https://lima-vm.io/) and [K3s](https://k3s.io/).
 
@@ -211,5 +211,5 @@ mise run clean    # Remove build artifacts
 Apache-2.0
 
 ## Subdirectories & Boundaries
-- [rs](./rs/README.md): Subsystem blueprint grouping child modules under apps/cli/homelab/rs.
+- [rs](./rs/README.md): Subsystem blueprint grouping child modules under apps/cli/vitruvian-homelab/rs.
 

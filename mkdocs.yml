@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-site_name: homelab
+site_name: Vitruvian Homelab
 site_description: Homelab k3s/Lima provisioning CLI (superseded for live cluster ops by devx; still released)
 repo_url: https://github.com/VitruvianSoftware/vitruvian-core
 edit_uri: edit/main/homelab/docs

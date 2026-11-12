@@ -62,7 +62,7 @@ mod tests {
 
     fn resolve_data_file(rel: &str) -> PathBuf {
         let candidates = [
-            PathBuf::from(format!("apps/cli/homelab/{}", rel)),
+            PathBuf::from(format!("apps/cli/vitruvian-homelab/{}", rel)),
             PathBuf::from(rel),
         ];
         for c in &candidates {
@@ -74,7 +74,7 @@ mod tests {
             let ws = env::var("TEST_WORKSPACE").unwrap_or_else(|_| "_main".to_string());
             let p = PathBuf::from(srcdir)
                 .join(ws)
-                .join("apps/cli/homelab")
+                .join("apps/cli/vitruvian-homelab")
                 .join(rel);
             if p.exists() {
                 return p;
@@ -1059,13 +1059,15 @@ nodes:
         let changelog_path = resolve_data_file("CHANGELOG.md");
         let changelog = fs::read_to_string(changelog_path).expect("read CHANGELOG.md");
 
-        let version =
-            lima::extract_json_string_field(&manifest.replace('\n', " "), "apps/cli/homelab")
-                .expect("extract version from .release-please-manifest.json");
+        let version = lima::extract_json_string_field(
+            &manifest.replace('\n', " "),
+            "apps/cli/vitruvian-homelab",
+        )
+        .expect("extract version from .release-please-manifest.json");
         assert!(!version.is_empty());
         assert!(
-            rp_cfg.contains("\"package-name\": \"homelab\""),
-            "release-please-config.json must declare homelab package"
+            rp_cfg.contains("\"package-name\": \"vitruvian-homelab\""),
+            "release-please-config.json must declare vitruvian-homelab package"
         );
         assert!(
             changelog.contains(&format!("## [{}]", version))

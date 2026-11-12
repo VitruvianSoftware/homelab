@@ -1,14 +1,14 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "bootstrap-sha": "df9b391b59b6549053583b7d0c61fcab105d098f",
+  "bootstrap-sha": "eda9685b941061a471e9ecc6c123add336e6544b",
   "include-component-in-tag": true,
   "include-v-in-tag": true,
   "tag-separator": "-",
   "packages": {
-    "apps/cli/homelab": {
+    "apps/cli/vitruvian-homelab": {
       "release-type": "go",
-      "package-name": "homelab",
-      "component": "homelab",
+      "package-name": "vitruvian-homelab",
+      "component": "vitruvian-homelab",
       "changelog-path": "CHANGELOG.md"
     }
   }

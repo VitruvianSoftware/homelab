@@ -1,5 +1,5 @@
-# homelab
+# Vitruvian Homelab
 
-Homelab k3s/Lima provisioning CLI (superseded for live cluster ops by devx; still released)
+Vitruvian Homelab k3s/Lima provisioning CLI (`homelab`; superseded for live cluster ops by Vitruvian DevX CLI; still released)
 
-The component's [README](https://github.com/VitruvianSoftware/vitruvian-core/blob/main/apps/cli/homelab/README.md) covers build and usage instructions.
+The component's [README](https://github.com/VitruvianSoftware/vitruvian-core/blob/main/apps/cli/vitruvian-homelab/README.md) covers build and usage instructions.
