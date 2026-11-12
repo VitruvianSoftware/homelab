@@ -31,14 +31,14 @@ brew install vitruviansoftware/tap/homelab
 ### From source
 
 ```bash
-git clone https://github.com/VitruvianSoftware/homelab.git
-cd homelab
+git clone https://github.com/VitruvianSoftware/vitruvian-homelab.git
+cd vitruvian-homelab
 make install
 ```
 
 ### GitHub Releases
 
-Download pre-built binaries from [Releases](https://github.com/VitruvianSoftware/homelab/releases).
+Download pre-built binaries from [Releases](https://github.com/VitruvianSoftware/vitruvian-homelab/releases).
 
 ## Quick Start
 

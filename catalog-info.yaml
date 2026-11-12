@@ -36,12 +36,12 @@ metadata:
     grafana/dashboard-selector: homelab
     vitruvian.dev/release-workflow: apps-release.yaml
     vitruvian.dev/release-model: goreleaser
-    vitruvian.dev/mirror: VitruvianSoftware/homelab
+    vitruvian.dev/mirror: VitruvianSoftware/vitruvian-homelab
   links:
-    - url: https://github.com/VitruvianSoftware/homelab
+    - url: https://github.com/VitruvianSoftware/vitruvian-homelab
       title: GitHub Mirror
       icon: github
-    - url: https://github.com/VitruvianSoftware/homelab/releases
+    - url: https://github.com/VitruvianSoftware/vitruvian-homelab/releases
       title: Releases (GoReleaser)
       icon: card_giftcard
     - url: https://grafana.lab.ipv1337.dev/d/homelab
